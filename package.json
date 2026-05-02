@@ -1,0 +1,19 @@
+{
+  "name": "dcbotnodejs",
+  "version": "1.0.0",
+  "description": "A professional Discord.js v14 application bot with a quiz flow, scoring, role assignment, staff logging, SQLite storage, and an optional web dashboard.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "discord.js": "^14.26.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}
