@@ -1,6 +1,6 @@
 # Discord Application Bot
 
-A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Bloxlink role assignment for Roblox groups, staff logging, and SQLite storage.
+A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Roblox group rank assignment, staff logging, warnings system, shift management, and SQLite storage.
 
 ---
 
@@ -11,7 +11,7 @@ A professional Discord.js v14 application bot with a quiz flow, scoring, automat
 - **Multiple-choice buttons** (A / B / C / D), user-locked and auto-disabled after click
 - **Randomised question order** (anti-cheat)
 - **Score tracking** — 70% pass threshold
-- **Automatic Bloxlink role assignment** — Users automatically receive Roblox group roles after passing
+- **Automatic Roblox group rank assignment** — Users automatically receive Roblox group ranks after passing (using Roblox API with cookie)
 - **SQLite database** for persistent storage
 - **1-hour cooldown** per user
 - Clean error handling — no crashes on API errors
@@ -58,7 +58,9 @@ Enable **Developer Mode** in Discord (Settings → Advanced → Developer Mode).
 | `CLIENT_ID`        | Developer Portal → General Information → Application ID |
 | `GUILD_ID`         | Right-click your server name → Copy Server ID           |
 | `LOG_CHANNEL_ID`   | Right-click the staff log channel → Copy Channel ID     |
-| `BLOXLINK_API_KEY` | Get from Bloxlink's API dashboard                       |
+| `SHIFT_CHANNEL_ID` | Right-click the shifts channel → Copy Channel ID        |
+| `ROBLOX_GROUP_ID`  | Your Roblox group ID                                    |
+| `ROBLOX_COOKIE`    | Roblox account cookie (.ROBLOSECURITY)                  |
 | `BLOXLINK_RANK_ID` | Your Roblox group rank ID to assign after acceptance    |
 
 ### 3. Install Dependencies
@@ -145,9 +147,10 @@ const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
 ## Troubleshooting
 
-| Problem                                    | Fix                                                                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| Bot does not respond to `/apply`           | Wait up to 1 minute after start, check `CLIENT_ID` and `GUILD_ID`                             |
-| Cannot send DM to user                     | User must have DMs open from server members (Discord Privacy Settings)                        |
-| User doesn't get Roblox role automatically | Ensure Bloxlink API key and rank ID are set, user's Roblox account must be linked to Bloxlink |
-| Bloxlink API shows error                   | Check that `BLOXLINK_API_KEY` is valid and `BLOXLINK_RANK_ID` exists in your Roblox group     |
+| Problem                                    | Fix                                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Bot does not respond to `/apply`           | Wait up to 1 minute after start, check `CLIENT_ID` and `GUILD_ID`                                     |
+| Cannot send DM to user                     | User must have DMs open from server members (Discord Privacy Settings)                                |
+| User doesn't get Roblox rank automatically | Ensure Roblox group ID, cookie, and rank ID are set, user's Roblox account must be linked to Bloxlink |
+| Roblox API shows error                     | Check that `ROBLOX_COOKIE` is valid, account has group permissions, and IDs are correct               |
+| Shifts not posted to channel               | Ensure `SHIFT_CHANNEL_ID` is set to a valid channel ID                                                |

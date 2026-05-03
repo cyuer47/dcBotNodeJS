@@ -1,7 +1,7 @@
 {
   "name": "dcbotnodejs",
   "version": "1.0.0",
-  "description": "A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Bloxlink role assignment for Roblox groups, staff logging, and SQLite storage.",
+  "description": "A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Roblox group rank assignment, staff logging, warnings system, shift management, and SQLite storage.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -37,6 +37,13 @@ function initDB() {
           warned_at    TEXT    NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_warn_user ON warnings(user_id);
+
+        CREATE TABLE IF NOT EXISTS shifts (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          time        TEXT    NOT NULL,
+          start_time  TEXT    NOT NULL,
+          created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
       `);
 
       console.log("✅ Database initialised at", DB_PATH);
@@ -191,6 +198,43 @@ function getAllWarnings(limit = 200) {
   });
 }
 
+// ─── Shifts ───────────────────────────────────────────────────────────────────
+function addShift({ time, startTime }) {
+  return new Promise((resolve, reject) => {
+    try {
+      const stmt = db.prepare(
+        "INSERT INTO shifts (time, start_time) VALUES (?, ?)",
+      );
+      const info = stmt.run(time, startTime);
+      resolve(info.lastInsertRowid);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function getShifts() {
+  return new Promise((resolve, reject) => {
+    try {
+      const rows = db.prepare("SELECT * FROM shifts ORDER BY id ASC").all();
+      resolve(rows);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function removeShift(shiftId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const info = db.prepare("DELETE FROM shifts WHERE id = ?").run(shiftId);
+      resolve(info.changes > 0);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 module.exports = {
   initDB,
   saveApplication,
@@ -202,4 +246,7 @@ module.exports = {
   removeWarning,
   clearWarnings,
   getAllWarnings,
+  addShift,
+  getShifts,
+  removeShift,
 };

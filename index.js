@@ -21,6 +21,10 @@ const {
   getWarnings,
   removeWarning,
   clearWarnings,
+  getStats,
+  addShift,
+  getShifts,
+  removeShift,
 } = require("./db");
 const { getShuffledQuestions } = require("./questions");
 
@@ -93,6 +97,50 @@ async function registerCommands() {
           .setRequired(false),
       )
       .toJSON(),
+
+    // /stats
+    new SlashCommandBuilder()
+      .setName("stats")
+      .setDescription("View application statistics")
+      .toJSON(),
+
+    // /shift add <time> <start_time>
+    new SlashCommandBuilder()
+      .setName("shift")
+      .setDescription("Manage shifts")
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addSubcommand((sub) =>
+        sub
+          .setName("add")
+          .setDescription("Add a new shift")
+          .addStringOption((o) =>
+            o
+              .setName("time")
+              .setDescription("Shift time (e.g., 10:00-18:00)")
+              .setRequired(true),
+          )
+          .addStringOption((o) =>
+            o
+              .setName("start_time")
+              .setDescription("Shift start time (e.g., 09:45)")
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub.setName("list").setDescription("List all shifts"),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("remove")
+          .setDescription("Remove a shift")
+          .addIntegerOption((o) =>
+            o
+              .setName("id")
+              .setDescription("Shift ID to remove")
+              .setRequired(true),
+          ),
+      )
+      .toJSON(),
   ];
 
   const rest = new REST({ version: "10" }).setToken(process.env.BOT_TOKEN);
@@ -125,10 +173,26 @@ function buildQuestionEmbed(question, index, total) {
     .setTitle(`Question ${index + 1} of ${total}`)
     .setDescription(`**${question.question}**`)
     .addFields(
-      { name: "🅰", value: question.options.A, inline: true },
-      { name: "🅱", value: question.options.B, inline: true },
-      { name: "©", value: question.options.C, inline: true },
-      { name: "🇩", value: question.options.D, inline: true },
+      {
+        name: ":regional_indicator_a:",
+        value: question.options.A,
+        inline: true,
+      },
+      {
+        name: ":regional_indicator_b:",
+        value: question.options.B,
+        inline: true,
+      },
+      {
+        name: ":regional_indicator_c:",
+        value: question.options.C,
+        inline: true,
+      },
+      {
+        name: ":regional_indicator_d:",
+        value: question.options.D,
+        inline: true,
+      },
     )
     .setFooter({ text: "Click a button below to answer" })
     .setTimestamp();
@@ -166,7 +230,7 @@ function buildResultEmbed(user, score, total, accepted) {
         inline: true,
       },
     )
-    .setFooter({ text: "Thank you for applying!" })
+    .setFooter({ text: "Ibeka Store Services" })
     .setTimestamp();
 }
 
@@ -397,6 +461,123 @@ async function handleClearWarns(interaction) {
   });
 }
 
+// ─── /stats handler ───────────────────────────────────────────────────────────
+async function handleStats(interaction) {
+  const stats = await getStats();
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("📊 Application Statistics")
+    .setDescription("Statistics for all applications submitted.")
+    .addFields(
+      {
+        name: "Total Applications",
+        value: `${stats.total || 0}`,
+        inline: true,
+      },
+      { name: "Accepted", value: `${stats.accepted || 0}`, inline: true },
+      { name: "Rejected", value: `${stats.rejected || 0}`, inline: true },
+      { name: "Average Score", value: `${stats.avg_pct || 0}%`, inline: true },
+    )
+    .setFooter({ text: "Ibeka Store Services" })
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+}
+
+// ─── /shift handler ───────────────────────────────────────────────────────────
+async function handleShift(interaction) {
+  const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === "add") {
+    const time = interaction.options.getString("time");
+    const startTime = interaction.options.getString("start_time");
+
+    const id = await addShift({ time, startTime });
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("✅ Shift Added")
+          .addFields(
+            { name: "Shift ID", value: `${id}`, inline: true },
+            { name: "Time", value: time, inline: true },
+            { name: "Start Time", value: startTime, inline: true },
+          )
+          .setFooter({ text: "Ibeka Store Services" })
+          .setTimestamp(),
+      ],
+    });
+
+    // Post to shift channel
+    if (process.env.SHIFT_CHANNEL_ID) {
+      try {
+        const shiftChannel = await client.channels.fetch(
+          process.env.SHIFT_CHANNEL_ID,
+        );
+        const shiftEmbed = new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle("🔔 New Shift Scheduled")
+          .setDescription(
+            `A new shift has been added to the schedule.\n\n**Shift Details:**\n• **Time:** ${time}\n• **Start Time:** ${startTime}\n• **ID:** ${id}\n\n**How Shifts Work:**\n• Arrive at the start time to prepare.\n• Be ready for your shift at the scheduled time.\n• Follow all store policies during your shift.\n• Report any issues to management immediately.\n\nThank you for your dedication to Ibeka Store Services!`,
+          )
+          .setFooter({ text: "Ibeka Store Services" })
+          .setTimestamp();
+        await shiftChannel.send({ embeds: [shiftEmbed] });
+      } catch (err) {
+        console.error("Failed to post shift:", err);
+      }
+    }
+  } else if (subcommand === "list") {
+    const shifts = await getShifts();
+    if (shifts.length === 0) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57f287)
+            .setDescription("No shifts scheduled."),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const list = shifts
+      .map((s) => `**ID ${s.id}** — ${s.time} (Start: ${s.start_time})`)
+      .join("\n");
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("📅 Scheduled Shifts")
+      .setDescription(list)
+      .setFooter({ text: "Ibeka Store Services" })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  } else if (subcommand === "remove") {
+    const id = interaction.options.getInteger("id");
+    const removed = await removeShift(id);
+    if (!removed) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setDescription(`❌ No shift found with ID \`${id}\`.`),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("🗑️ Shift Removed")
+          .setDescription(`Shift ID \`${id}\` has been removed.`)
+          .setFooter({ text: "Ibeka Store Services" })
+          .setTimestamp(),
+      ],
+    });
+  }
+}
+
 // ─── Quiz Runner ──────────────────────────────────────────────────────────────
 async function runQuiz(interaction) {
   const user = interaction.user;
@@ -464,7 +645,7 @@ async function runQuiz(interaction) {
         .setDescription(
           `Hello **${user.username}**!\n\nYou will be asked **${questions.length} questions**.\nYou need **70% or higher** to be accepted.\n\n*Answer by clicking the buttons.*`,
         )
-        .setFooter({ text: "Good luck!" }),
+        .setFooter({ text: "Ibeka Store Services" }),
     ],
   });
 
@@ -542,37 +723,51 @@ async function runQuiz(interaction) {
   } catch {}
 
   if (accepted) {
-    // Attempt automatic Roblox group role assignment via Bloxlink API
+    // Attempt automatic Roblox group rank assignment using Roblox API with cookie
     try {
-      const bloxlinkApiKey = process.env.BLOXLINK_API_KEY;
-      const rankId = process.env.BLOXLINK_RANK_ID;
-      const guildId = process.env.GUILD_ID;
+      const robloxGroupId = process.env.ROBLOX_GROUP_ID;
+      const robloxCookie = process.env.ROBLOX_COOKIE;
+      const rankId = process.env.BLOXLINK_RANK_ID; // Reuse the rank ID
 
-      if (!bloxlinkApiKey || !rankId) {
-        throw new Error("Bloxlink API key or rank ID not configured");
+      if (!robloxGroupId || !robloxCookie || !rankId) {
+        throw new Error("Roblox group ID, cookie, or rank ID not configured");
       }
 
-      const response = await fetch(
-        `https://api.blox.link/v4/guilds/${guildId}/users/${userId}/roles`,
+      // First, get Roblox user ID from Discord ID using Bloxlink public API
+      const bloxlinkResponse = await fetch(
+        `https://api.blox.link/v1/user/${userId}`,
+      );
+      if (!bloxlinkResponse.ok) {
+        throw new Error("Failed to get Roblox ID from Bloxlink");
+      }
+      const bloxlinkData = await bloxlinkResponse.json();
+      const robloxUserId = bloxlinkData.robloxId;
+      if (!robloxUserId) {
+        throw new Error("User has no linked Roblox account");
+      }
+
+      // Now, set the rank using Roblox API
+      const robloxResponse = await fetch(
+        `https://groups.roblox.com/v1/groups/${robloxGroupId}/users/${robloxUserId}`,
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${bloxlinkApiKey}`,
             "Content-Type": "application/json",
+            Cookie: `.ROBLOSECURITY=${robloxCookie}`,
           },
-          body: JSON.stringify({ roleIds: [rankId] }),
+          body: JSON.stringify({ roleId: rankId }),
         },
       );
 
-      if (response.ok) {
+      if (robloxResponse.ok) {
         // Success! Rank was assigned
         await dm.send({
           embeds: [
             new EmbedBuilder()
               .setColor(0x57f287)
-              .setTitle("🎮 Roblox Group Role Assigned")
+              .setTitle("🎮 Roblox Group Rank Assigned")
               .setDescription(
-                "**Congratulations!** You have been accepted and your Roblox group role has been automatically assigned!\n\nYou should now have access to the group. If you don't see it yet, try leaving and rejoing the Roblox group.",
+                "**Congratulations!** You have been accepted and your Roblox group rank has been automatically updated!\n\nYou should now have access to the group. If you don't see it yet, try leaving and rejoining the Roblox group.",
               )
               .setFooter({ text: "Welcome to the group!" })
               .setTimestamp(),
@@ -580,35 +775,35 @@ async function runQuiz(interaction) {
         });
       } else {
         // API call failed, fallback to manual instructions
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Bloxlink API error:", errorData);
+        const errorText = await robloxResponse.text();
+        console.error("Roblox API error:", errorText);
 
         await dm.send({
           embeds: [
             new EmbedBuilder()
               .setColor(0xfee75c)
-              .setTitle("🎮 Roblox Group Role")
+              .setTitle("🎮 Roblox Group Rank")
               .setDescription(
-                "**Congratulations!** You have been accepted.\n\nPlease use the `/getrole` command in the server to receive your Roblox group role.\n\n*Make sure your Roblox account is linked to Bloxlink!*",
+                "**Congratulations!** You have been accepted.\n\nPlease contact management to receive your Roblox group rank update.\n\n*Make sure your Roblox account is linked to Bloxlink!*",
               )
-              .setFooter({ text: "Use /getrole to receive your group role" })
+              .setFooter({ text: "Contact management for rank update" })
               .setTimestamp(),
           ],
         });
       }
     } catch (err) {
-      console.error("Bloxlink assignment error:", err);
+      console.error("Roblox assignment error:", err);
       // Fallback: send manual instructions
       try {
         await dm.send({
           embeds: [
             new EmbedBuilder()
               .setColor(0xfee75c)
-              .setTitle("🎮 Roblox Group Role")
+              .setTitle("🎮 Roblox Group Rank")
               .setDescription(
-                "**Congratulations!** You have been accepted.\n\nPlease use the `/getrole` command in the server to receive your Roblox group role.\n\n*Make sure your Roblox account is linked to Bloxlink!*",
+                "**Congratulations!** You have been accepted.\n\nPlease contact management to receive your Roblox group rank update.\n\n*Make sure your Roblox account is linked to Bloxlink!*",
               )
-              .setFooter({ text: "Use /getrole to receive your group role" })
+              .setFooter({ text: "Contact management for rank update" })
               .setTimestamp(),
           ],
         });
@@ -652,6 +847,10 @@ client.on("interactionCreate", async (interaction) => {
         return await handleWarnings(interaction);
       case "clearwarns":
         return await handleClearWarns(interaction);
+      case "stats":
+        return await handleStats(interaction);
+      case "shift":
+        return await handleShift(interaction);
     }
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
