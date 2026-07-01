@@ -25,6 +25,13 @@ const {
   addShift,
   getShifts,
   removeShift,
+  addTraining,
+  addModeratorUser,
+  removeModeratorUser,
+  addModeratorRole,
+  removeModeratorRole,
+  isUserModerator,
+  getModeratorRoles,
 } = require("./db");
 const { getShuffledQuestions } = require("./questions");
 
@@ -54,7 +61,6 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName("warn")
       .setDescription("Warn a member")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) =>
         o
           .setName("user")
@@ -73,7 +79,6 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName("warnings")
       .setDescription("View all warnings for a member")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) =>
         o
           .setName("user")
@@ -86,7 +91,6 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName("clearwarns")
       .setDescription("Remove a specific warning or all warnings from a member")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) =>
         o.setName("user").setDescription("The member").setRequired(true),
       )
@@ -108,7 +112,6 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName("shift")
       .setDescription("Manage shifts")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addSubcommand((sub) =>
         sub
           .setName("add")
@@ -137,6 +140,81 @@ async function registerCommands() {
             o
               .setName("id")
               .setDescription("Shift ID to remove")
+              .setRequired(true),
+          ),
+      )
+      .toJSON(),
+
+    // /training
+    new SlashCommandBuilder()
+      .setName("training")
+      .setDescription("Manage training sessions")
+      .addSubcommand((sub) =>
+        sub
+          .setName("create")
+          .setDescription("Create a new training session")
+          .addStringOption((o) =>
+            o
+              .setName("title")
+              .setDescription("Training session title")
+              .setRequired(true),
+          )
+          .addStringOption((o) =>
+            o
+              .setName("start_time")
+              .setDescription("Session start time (e.g., 19:00)")
+              .setRequired(true),
+          )
+          .addStringOption((o) =>
+            o
+              .setName("entry_time")
+              .setDescription("Entry time (e.g., 18:55)")
+              .setRequired(true),
+          )
+          .addIntegerOption((o) =>
+            o
+              .setName("min_participants")
+              .setDescription("Minimum participants to start")
+              .setRequired(true),
+          ),
+      )
+      .toJSON(),
+    // /moderator add/remove user/role
+    new SlashCommandBuilder()
+      .setName("moderator")
+      .setDescription("Manage bot moderators (users & roles)")
+      .addSubcommand((sub) =>
+        sub
+          .setName("add-user")
+          .setDescription("Add a user as moderator")
+          .addUserOption((o) =>
+            o.setName("user").setDescription("Member").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("remove-user")
+          .setDescription("Remove a moderator user")
+          .addUserOption((o) =>
+            o.setName("user").setDescription("Member").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("add-role")
+          .setDescription("Make a role count as moderator")
+          .addRoleOption((o) =>
+            o.setName("role").setDescription("Role to add").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("remove-role")
+          .setDescription("Remove a moderator role")
+          .addRoleOption((o) =>
+            o
+              .setName("role")
+              .setDescription("Role to remove")
               .setRequired(true),
           ),
       )
@@ -257,6 +335,22 @@ function buildLogEmbed(user, score, total, accepted) {
 
 // ─── /warn handler ────────────────────────────────────────────────────────────
 async function handleWarn(interaction) {
+  // allow moderators recorded in DB or members with ModerateMembers permission
+  if (
+    !(await hasPermissionOrModerator(
+      interaction.member,
+      PermissionFlagsBits.ModerateMembers,
+    ))
+  ) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription("❌ You do not have permission to warn members."),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
   const target = interaction.options.getMember("user");
   const reason = interaction.options.getString("reason");
   const mod = interaction.member;
@@ -366,6 +460,21 @@ async function handleWarn(interaction) {
 
 // ─── /warnings handler ────────────────────────────────────────────────────────
 async function handleWarnings(interaction) {
+  if (
+    !(await hasPermissionOrModerator(
+      interaction.member,
+      PermissionFlagsBits.ModerateMembers,
+    ))
+  ) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription("❌ You do not have permission to view warnings."),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
   const target = interaction.options.getUser("user");
   const warns = await getWarnings(target.id);
 
@@ -405,6 +514,21 @@ async function handleWarnings(interaction) {
 
 // ─── /clearwarns handler ─────────────────────────────────────────────────────
 async function handleClearWarns(interaction) {
+  if (
+    !(await hasPermissionOrModerator(
+      interaction.member,
+      PermissionFlagsBits.ModerateMembers,
+    ))
+  ) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription("❌ You do not have permission to clear warnings."),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
   const target = interaction.options.getUser("user");
   const warnId = interaction.options.getInteger("warn_id");
 
@@ -484,9 +608,132 @@ async function handleStats(interaction) {
   await interaction.reply({ embeds: [embed] });
 }
 
+// ─── /training handler ───────────────────────────────────────────────────────
+async function handleTraining(interaction) {
+  const subcommand = interaction.options.getSubcommand();
+  // Only allow members with ManageGuild or moderators
+  if (
+    !(await hasPermissionOrModerator(
+      interaction.member,
+      PermissionFlagsBits.ManageGuild,
+    ))
+  ) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription("❌ You do not have permission to manage trainings."),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (subcommand === "create") {
+    const title = interaction.options.getString("title");
+    const startTime = interaction.options.getString("start_time");
+    const entryTime = interaction.options.getString("entry_time");
+    const minParticipants = interaction.options.getInteger("min_participants");
+    const creator = interaction.member.user.tag;
+
+    const id = await addTraining({
+      title,
+      startTime,
+      entryTime,
+      minParticipants,
+      creator,
+    });
+
+    // Create training announcement embed
+    const trainingEmbed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(`🎓 ${title}`)
+      .setDescription("Training Session")
+      .addFields(
+        {
+          name: "Created By",
+          value: creator,
+          inline: true,
+        },
+        {
+          name: "Date",
+          value: new Date().toLocaleDateString("en-NL"),
+          inline: true,
+        },
+        {
+          name: "Time",
+          value: new Date().toLocaleTimeString(),
+          inline: true,
+        },
+      )
+      .addFields(
+        {
+          name: "\n📋 Rules",
+          value:
+            "❗ Behave professionally during the session\n\n🔴 If you leave, you are no longer allowed to participate in the current session\n\n📢 Late arrivals cannot participate in the session\n\n⭐ Be the best in the session and get promoted",
+        },
+        {
+          name: "\n📌 Information",
+          value: `• Session starts at: **${startTime}**\n• Entry available until: **${entryTime}**\n• Minimum participants: **${minParticipants}**\n\nThe training will continue if there are at least **${minParticipants}** ✅ participants.\n\nBe professional and follow all rules to earn a promotion!`,
+        },
+      )
+      .setFooter({ text: "Ibeka Store Services" })
+      .setTimestamp();
+
+    // Post to training channel if configured
+    if (process.env.TRAINING_CHANNEL_ID) {
+      try {
+        const trainingChannel = await client.channels.fetch(
+          process.env.TRAINING_CHANNEL_ID,
+        );
+        await trainingChannel.send({ embeds: [trainingEmbed] });
+      } catch (err) {
+        console.error("Failed to post training session:", err);
+      }
+    }
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle("✅ Training Session Created")
+          .addFields(
+            { name: "Title", value: title, inline: true },
+            { name: "Session ID", value: `${id}`, inline: true },
+            { name: "Start Time", value: startTime, inline: true },
+            { name: "Entry Time", value: entryTime, inline: true },
+            {
+              name: "Min Participants",
+              value: `${minParticipants}`,
+              inline: true,
+            },
+          )
+          .setFooter({ text: "Ibeka Store Services" })
+          .setTimestamp(),
+      ],
+    });
+  }
+}
+
 // ─── /shift handler ───────────────────────────────────────────────────────────
 async function handleShift(interaction) {
   const subcommand = interaction.options.getSubcommand();
+  // ManageGuild or moderators allowed for add/remove; list is open
+  if (
+    subcommand !== "list" &&
+    !(await hasPermissionOrModerator(
+      interaction.member,
+      PermissionFlagsBits.ManageGuild,
+    ))
+  ) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription("❌ You do not have permission to manage shifts."),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   if (subcommand === "add") {
     const time = interaction.options.getString("time");
@@ -573,6 +820,206 @@ async function handleShift(interaction) {
           .setDescription(`Shift ID \`${id}\` has been removed.`)
           .setFooter({ text: "Ibeka Store Services" })
           .setTimestamp(),
+      ],
+    });
+  }
+}
+
+async function isMemberAllowedToManageModerators(member) {
+  // Allow if administrator or manage guild
+  try {
+    if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+    if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+  } catch {}
+
+  // Check DB user moderators
+  try {
+    const isUserMod = await isUserModerator(member.id);
+    if (isUserMod) return true;
+  } catch {}
+
+  // Check roles saved as moderator roles
+  try {
+    const modRoleIds = await getModeratorRoles();
+    const memberRoleIds = member.roles?.cache?.map((r) => r.id) || [];
+    if (memberRoleIds.some((id) => modRoleIds.includes(id))) return true;
+  } catch {}
+
+  return false;
+}
+
+async function hasPermissionOrModerator(member, permissionFlag) {
+  try {
+    if (member.permissions?.has(permissionFlag)) return true;
+  } catch {}
+
+  try {
+    const isUserMod = await isUserModerator(member.id);
+    if (isUserMod) return true;
+  } catch {}
+
+  try {
+    const modRoleIds = await getModeratorRoles();
+    const memberRoleIds = member.roles?.cache?.map((r) => r.id) || [];
+    if (memberRoleIds.some((id) => modRoleIds.includes(id))) return true;
+  } catch {}
+
+  return false;
+}
+
+async function handleModerator(interaction) {
+  const sub = interaction.options.getSubcommand();
+  const invoker = interaction.member;
+
+  if (!(await isMemberAllowedToManageModerators(invoker))) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setDescription(
+            "❌ You do not have permission to manage moderators.",
+          ),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (sub === "add-user") {
+    const user = interaction.options.getUser("user");
+    if (!user)
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setDescription("User not found."),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+
+    const already = await isUserModerator(user.id);
+    if (already) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xfee75c)
+            .setDescription(`✅ <@${user.id}> is already a moderator.`),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    await addModeratorUser(user.id, invoker.user.tag);
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setDescription(`✅ Added <@${user.id}> as a moderator.`),
+      ],
+    });
+  }
+
+  if (sub === "remove-user") {
+    const user = interaction.options.getUser("user");
+    if (!user)
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setDescription("User not found."),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+
+    const removed = await removeModeratorUser(user.id);
+    if (!removed) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xfee75c)
+            .setDescription(`ℹ️ <@${user.id}> was not a moderator.`),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setDescription(`🗑️ Removed <@${user.id}> from moderators.`),
+      ],
+    });
+  }
+
+  if (sub === "add-role") {
+    const role = interaction.options.getRole("role");
+    if (!role)
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setDescription("Role not found."),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+
+    const modRoleIds = await getModeratorRoles();
+    if (modRoleIds.includes(role.id)) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xfee75c)
+            .setDescription(
+              `✅ Role **${role.name}** is already a moderator role.`,
+            ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    await addModeratorRole(role.id, invoker.user.tag);
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setDescription(
+            `✅ Role **${role.name}** will now be treated as moderator.`,
+          ),
+      ],
+    });
+  }
+
+  if (sub === "remove-role") {
+    const role = interaction.options.getRole("role");
+    if (!role)
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xed4245)
+            .setDescription("Role not found."),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+
+    const removed = await removeModeratorRole(role.id);
+    if (!removed) {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xfee75c)
+            .setDescription(
+              `ℹ️ Role **${role.name}** was not a moderator role.`,
+            ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setDescription(
+            `🗑️ Role **${role.name}** removed from moderator roles.`,
+          ),
       ],
     });
   }
@@ -851,6 +1298,10 @@ client.on("interactionCreate", async (interaction) => {
         return await handleStats(interaction);
       case "shift":
         return await handleShift(interaction);
+      case "training":
+        return await handleTraining(interaction);
+      case "moderator":
+        return await handleModerator(interaction);
     }
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);

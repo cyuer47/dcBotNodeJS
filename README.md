@@ -1,6 +1,6 @@
 # Discord Application Bot
 
-A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Roblox group rank assignment, staff logging, warnings system, shift management, and SQLite storage.
+A professional Discord.js v14 application bot with a quiz flow, scoring, automatic Roblox group rank assignment, staff logging, warnings system, shift management, training session management, and SQLite storage.
 
 ---
 
@@ -12,6 +12,10 @@ A professional Discord.js v14 application bot with a quiz flow, scoring, automat
 - **Randomised question order** (anti-cheat)
 - **Score tracking** — 70% pass threshold
 - **Automatic Roblox group rank assignment** — Users automatically receive Roblox group ranks after passing (using Roblox API with cookie)
+- **Training session announcements** — Create professional training session posts with rules and requirements
+- **Shift management system** — Add, view, and remove work shifts with automatic announcements
+- **Warning system** — Warn members with automatic moderation actions (mute/kick/ban)
+- **Application statistics** — View aggregated stats on applications
 - **SQLite database** for persistent storage
 - **1-hour cooldown** per user
 - Clean error handling — no crashes on API errors
@@ -52,16 +56,17 @@ discord-bot/
 
 Enable **Developer Mode** in Discord (Settings → Advanced → Developer Mode).
 
-| Value              | How to get it                                           |
-| ------------------ | ------------------------------------------------------- |
-| `BOT_TOKEN`        | Discord Developer Portal → Bot → Token                  |
-| `CLIENT_ID`        | Developer Portal → General Information → Application ID |
-| `GUILD_ID`         | Right-click your server name → Copy Server ID           |
-| `LOG_CHANNEL_ID`   | Right-click the staff log channel → Copy Channel ID     |
-| `SHIFT_CHANNEL_ID` | Right-click the shifts channel → Copy Channel ID        |
-| `ROBLOX_GROUP_ID`  | Your Roblox group ID                                    |
-| `ROBLOX_COOKIE`    | Roblox account cookie (.ROBLOSECURITY)                  |
-| `BLOXLINK_RANK_ID` | Your Roblox group rank ID to assign after acceptance    |
+| Value                 | How to get it                                                    |
+| --------------------- | ---------------------------------------------------------------- |
+| `BOT_TOKEN`           | Discord Developer Portal → Bot → Token                           |
+| `CLIENT_ID`           | Developer Portal → General Information → Application ID          |
+| `GUILD_ID`            | Right-click your server name → Copy Server ID                    |
+| `LOG_CHANNEL_ID`      | Right-click the staff log channel → Copy Channel ID              |
+| `SHIFT_CHANNEL_ID`    | Right-click the shifts channel → Copy Channel ID                 |
+| `TRAINING_CHANNEL_ID` | Right-click the training announcements channel → Copy Channel ID |
+| `ROBLOX_GROUP_ID`     | Your Roblox group ID                                             |
+| `ROBLOX_COOKIE`       | Roblox account cookie (.ROBLOSECURITY)                           |
+| `BLOXLINK_RANK_ID`    | Your Roblox group rank ID to assign after acceptance             |
 
 ### 3. Install Dependencies
 

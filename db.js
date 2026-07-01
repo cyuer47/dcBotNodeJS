@@ -44,6 +44,23 @@ function initDB() {
           start_time  TEXT    NOT NULL,
           created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS trainings (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          title         TEXT    NOT NULL,
+          start_time    TEXT    NOT NULL,
+          entry_time    TEXT    NOT NULL,
+          min_participants INTEGER NOT NULL,
+          creator       TEXT    NOT NULL,
+          created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS moderators (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          type        TEXT    NOT NULL,
+          target_id   TEXT    NOT NULL,
+          added_by    TEXT    NOT NULL,
+          added_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
       `);
 
       console.log("✅ Database initialised at", DB_PATH);
@@ -235,6 +252,116 @@ function removeShift(shiftId) {
   });
 }
 
+// ─── Trainings ───────────────────────────────────────────────────────────────
+function addTraining({
+  title,
+  startTime,
+  entryTime,
+  minParticipants,
+  creator,
+}) {
+  return new Promise((resolve, reject) => {
+    try {
+      const stmt = db.prepare(
+        "INSERT INTO trainings (title, start_time, entry_time, min_participants, creator) VALUES (?, ?, ?, ?, ?)",
+      );
+      const info = stmt.run(
+        title,
+        startTime,
+        entryTime,
+        minParticipants,
+        creator,
+      );
+      resolve(info.lastInsertRowid);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// ─── Moderators ─────────────────────────────────────────────────────────────
+function addModeratorUser(userId, addedBy) {
+  return new Promise((resolve, reject) => {
+    try {
+      const stmt = db.prepare(
+        "INSERT INTO moderators (type, target_id, added_by) VALUES ('user', ?, ?)",
+      );
+      const info = stmt.run(userId, addedBy);
+      resolve(info.lastInsertRowid);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function removeModeratorUser(userId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const info = db
+        .prepare("DELETE FROM moderators WHERE type = 'user' AND target_id = ?")
+        .run(userId);
+      resolve(info.changes > 0);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function addModeratorRole(roleId, addedBy) {
+  return new Promise((resolve, reject) => {
+    try {
+      const stmt = db.prepare(
+        "INSERT INTO moderators (type, target_id, added_by) VALUES ('role', ?, ?)",
+      );
+      const info = stmt.run(roleId, addedBy);
+      resolve(info.lastInsertRowid);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function removeModeratorRole(roleId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const info = db
+        .prepare("DELETE FROM moderators WHERE type = 'role' AND target_id = ?")
+        .run(roleId);
+      resolve(info.changes > 0);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function isUserModerator(userId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const row = db
+        .prepare(
+          "SELECT COUNT(*) AS c FROM moderators WHERE type = 'user' AND target_id = ?",
+        )
+        .get(userId);
+      resolve(row.c > 0);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function getModeratorRoles() {
+  return new Promise((resolve, reject) => {
+    try {
+      const rows = db
+        .prepare("SELECT target_id FROM moderators WHERE type = 'role'")
+        .all();
+      resolve(rows.map((r) => r.target_id));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 module.exports = {
   initDB,
   saveApplication,
@@ -249,4 +376,11 @@ module.exports = {
   addShift,
   getShifts,
   removeShift,
+  addTraining,
+  addModeratorUser,
+  removeModeratorUser,
+  addModeratorRole,
+  removeModeratorRole,
+  isUserModerator,
+  getModeratorRoles,
 };
